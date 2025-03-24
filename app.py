@@ -13,19 +13,34 @@ CORS(app)  # Enable CORS to prevent cross-origin issues
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
 def scrape_website(url):
-    """Scrape text from the provided URL."""
-    response = requests.get(url)
+    """Scrape text from the provided URL with limits to prevent memory overload."""
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    response = requests.get(url, headers=headers)
+    
     soup = BeautifulSoup(response.text, 'html.parser')
-    text = " ".join([p.text for p in soup.find_all('p')])
+    paragraphs = soup.find_all('p')
+
+    # Limit the number of paragraphs extracted (adjust as needed)
+    max_paragraphs = 50  
+    text = " ".join([p.text for p in paragraphs[:max_paragraphs]])
+    
     return text
+
 
 def create_vector_store(text):
     """Convert text into embeddings and store in FAISS index."""
     chunks = text.split(". ")  # Split into sentences
-    embeddings = model.encode(chunks)
+    
+    # Limit the number of chunks to avoid memory overload
+    max_chunks = 500  # Adjust as needed
+    chunks = chunks[:max_chunks]
+    
+    embeddings = model.encode(chunks, batch_size=8, convert_to_numpy=True)
+    
     dimension = embeddings.shape[1]
     index = faiss.IndexFlatL2(dimension)
     index.add(np.array(embeddings))
+    
     return index, chunks
 
 def retrieve(query, index, chunks, top_k=3):
